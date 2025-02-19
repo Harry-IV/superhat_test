@@ -15,10 +15,10 @@ GPIO.output(DIR, CW)
 
 step_count = SPR
 revolutions = 2
-speed = 4
+speed = 1
 delay = .0026 / speed
 
-for i in range(3):
+for i in range(2):
     GPIO.output(DIR, CW)
     print("Clockwise")
     for x in range(step_count * revolutions):
