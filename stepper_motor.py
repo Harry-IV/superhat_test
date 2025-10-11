@@ -2,7 +2,7 @@ from time import sleep
 # sudo apt-get install rpi.gpio
 import RPi.GPIO as GPIO
 
-DIR = 20   # Direction GPIO Pin
+DIR = 26   # Direction GPIO Pin
 STEP = 21  # Step GPIO Pin
 CW = 1     # Clockwise Rotation
 CCW = 0    # Counterclockwise Rotation
@@ -15,10 +15,10 @@ GPIO.output(DIR, CW)
 
 step_count = SPR
 revolutions = 2
-speed = 1
+speed = 4
 delay = .0026 / speed
 
-for i in range(2):
+for i in range(10):
     GPIO.output(DIR, CW)
     print("Clockwise")
     for x in range(step_count * revolutions):

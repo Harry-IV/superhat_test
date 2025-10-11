@@ -1,19 +1,14 @@
 from time import sleep
 
-# pip3 install keyboard
-import keyboard
-
 # sudo apt-get install rpi.gpio
 import RPi.GPIO as GPIO
 
-import sys
-
-TOPLEFT = 15
-TOPRIGHT = 6
-BOTTOMLEFT = 14
+TOPLEFT = 17
+TOPRIGHT = 11
+BOTTOMLEFT = 18
 BOTTOMRIGHT = 16
 
-gpios = {"Top Left": 15, "Top Right": 6, "Bottom Left": 14, "Bottom Right": 16}
+gpios = {"Top Left": 17, "Top Right": 11, "Bottom Left": 18, "Bottom Right": 16}
 
 GPIO.setmode(GPIO.BCM)
 
