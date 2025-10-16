@@ -1,80 +1,96 @@
 import board
 import busio
-i2c = busio.I2C(board.SCL, board.SDA)
+import time
+from rich.live import Live
+from rich.table import Table
 import adafruit_ads1x15.ads1015 as ADS
 from adafruit_ads1x15.analog_in import AnalogIn
-from time import sleep
-import csv
 
-# sudo apt-get install rpi.gpio
-import RPi.GPIO as GPIO
+i2c = busio.I2C(board.SCL, board.SDA)
 
-TOPLEFT = 17
-TOPRIGHT = 11
-BOTTOMLEFT = 18
-BOTTOMRIGHT = 16
+left_thrusters = ADS.ADS1015(i2c, address=0x48)
+right_thrusters = ADS.ADS1015(i2c, address=0x49)
+voltage_channels = ADS.ADS1015(i2c, address=0x4A)
 
-gpios = {"Top Left": 17, "Top Right": 11, "Bottom Left": 18, "Bottom Right": 16}
+ads_pins = [ADS.P0, ADS.P1, ADS.P2, ADS.P3]
 
-GPIO.setmode(GPIO.BCM)
+SHUNT_VALUE = 0.0033
+AMP_FACTOR = 50
 
-for gpio in gpios.values():
-    GPIO.setup(gpio, GPIO.OUT)
+# Voltage amplification factors for each channel
+VOLTAGE_GAINS = {
+    ADS.P0: 19.8,  # expects ~48V
+    ADS.P1: 5.273,  # expects ~12V
+    ADS.P2: 2.0,   # expects ~5V
+    ADS.P3: 2.0,   # expects ~3.3V
+}
 
-ads = ADS.ADS1015(i2c)
+VOLTAGE_TARGETS = {
+    "V0": 48.0,
+    "V1": 12.0,
+    "V2": 5.0,
+    "V3": 3.3,
+}
 
-while True:
-    chan = AnalogIn(ads, ADS.P0)
-    current = (chan.voltage / (0.0033 * 200))
-    print(current)
-    sleep(0.1)
+def read_all_channels():
+    """Read from all thruster and voltage channels."""
+    readings = {}
 
+    # Thruster current channels
+    for name, ads in [("L", left_thrusters), ("R", right_thrusters)]:
+        for i, pin in enumerate(ads_pins):
+            chan = AnalogIn(ads, pin)
+            current = chan.voltage / (SHUNT_VALUE * AMP_FACTOR)
+            readings[f"{name}{i}"] = current
 
-# GPIO.output(gpios["Bottom Right"], GPIO.HIGH)
-# f = open("current_sense/voltage_data/R1000_C2.2.csv", 'w')    
-# writer = csv.writer(f)
-# writer.writerow(["Counter","Voltage"])
+    # Voltage channels
+    for i, pin in enumerate(ads_pins):
+        chan = AnalogIn(voltage_channels, pin)
+        voltage = chan.voltage * VOLTAGE_GAINS[pin]
+        readings[f"V{i}"] = voltage
 
-# def write_data():
-#     chan = AnalogIn(ads, ADS.P0)
-#     print(chan.voltage)
-    # writer.writerow([i, int(1000*chan.voltage)/1000])  
-
-# # switching 
-# for c in range(200):    
-#     GPIO.output(gpios["Bottom Right"], GPIO.HIGH)
-#     for i in range(10):
-#         write_data()
-#         sleep(0.001)
-#     GPIO.output(gpios["Bottom Right"], GPIO.LOW)
-#     for i in range(10):
-#         write_data()
-#         sleep(0.001)
-
-# # constant 
-# GPIO.output(gpios["Bottom Right"], GPIO.HIGH)
-# for i in range(100):
-#     write_data()
-#     sleep(0.01)
-# GPIO.output(gpios["Bottom Right"], GPIO.LOW)
+    return readings
 
 
-# f.close()
-    
-# while True:
-#     GPIO.output(gpios["Bottom Right"], GPIO.HIGH)
-#     for i in range(100):
-#         chan = AnalogIn(ads, ADS.P0)
-#         # print(chan.value, chan.voltage)
-#         current = (chan.voltage / (0.0033 * 200)) 
-#         print(chan.voltage)
-#         sleep(0.01)
-#     GPIO.output(gpios["Bottom Right"], GPIO.LOW)
-#     for i in range(100):
-#         chan = AnalogIn(ads, ADS.P0)
-#         # print(chan.value, chan.voltage)
-#         # current = (chan.voltage / (0.0033 * 200)) 
-#         print(chan.voltage)
-#         sleep(0.01)
-    
-    
+def make_table(readings):
+    """Create a rich table showing thruster currents and voltages."""
+    table = Table(title="Current & Voltage Monitor", expand=True)
+
+    table.add_column("Channel", justify="center", style="bold cyan")
+    table.add_column("Reading", justify="center", style="bold yellow")
+
+    for label, value in readings.items():
+        if label.startswith(("L", "R")):
+            # Current channels
+            unit = "A"
+            color = "green"
+            if abs(value) > 10:
+                color = "red"
+            elif abs(value) > 5:
+                color = "yellow"
+            display = f"[{color}]{value:7.2f} {unit}[/{color}]"
+        else:
+            # Voltage channels
+            unit = "V"
+            target = VOLTAGE_TARGETS[label]
+            deviation = abs(value - target) / target
+            if deviation < 0.05:
+                color = "green"
+            elif deviation < 0.10:
+                color = "yellow"
+            else:
+                color = "red"
+            display = f"[{color}]{value:7.2f} {unit}[/{color}]"
+
+        table.add_row(label, display)
+
+    return table
+
+
+# --- Live updating display ---
+with Live(auto_refresh=False, screen=True) as live:
+    while True:
+        readings = read_all_channels()
+        table = make_table(readings)
+        live.update(table, refresh=True)
+        time.sleep(0.2)
